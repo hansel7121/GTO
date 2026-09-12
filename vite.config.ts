@@ -10,12 +10,25 @@ const isolationHeaders = {
   'Cross-Origin-Embedder-Policy': 'require-corp',
 }
 
+// BASE_PATH=/GTO/ for GitHub Pages project sites; '/' for Vercel and local dev.
+const base = process.env.BASE_PATH ?? '/'
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // custom service worker: precaching + COOP/COEP header injection (needed on hosts that
+      // cannot set headers, e.g. GitHub Pages) so the multithreaded solver can run
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html,svg,wasm}'],
+      },
       includeAssets: ['icon.svg'],
       manifest: {
         name: 'GTO Trainer',
@@ -25,10 +38,6 @@ export default defineConfig({
         background_color: '#0f172a',
         display: 'standalone',
         icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
-      },
-      workbox: {
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,svg,wasm}'],
       },
     }),
   ],

@@ -42,6 +42,13 @@ npm test           # unit tests incl. a solver smoke test that reproduces the up
 npm run build      # production build in dist/
 ```
 
+### GitHub Pages (this repo)
+
+`npm run deploy` builds with `BASE_PATH=/GTO/` and pushes `dist/` to the `gh-pages` branch, which is published at
+**https://hansel7121.github.io/GTO/**. GitHub Pages cannot send COOP/COEP headers, so the app's service worker
+(`src/sw.ts`) injects them and reloads once on first visit — after that `crossOriginIsolated` is true and the
+multithreaded solver runs. Routing uses hash URLs (`/#/session/…`) so deep links work on a static host.
+
 ### Deploy (free) on Vercel
 
 ```bash
