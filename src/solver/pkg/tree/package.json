@@ -1,0 +1,19 @@
+{
+  "name": "tree",
+  "type": "module",
+  "collaborators": [
+    "Wataru Inariba"
+  ],
+  "version": "0.2.7",
+  "license": "AGPL-3.0-or-later",
+  "files": [
+    "tree_bg.wasm",
+    "tree.js",
+    "tree.d.ts"
+  ],
+  "main": "tree.js",
+  "types": "tree.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
