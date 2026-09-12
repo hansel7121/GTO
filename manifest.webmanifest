@@ -1,0 +1,1 @@
+{"name":"GTO Trainer","short_name":"GTO Trainer","description":"Log live poker hands and grade every decision against GTO.","start_url":"/GTO/","display":"standalone","background_color":"#0f172a","theme_color":"#0f172a","lang":"en","scope":"/GTO/","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
