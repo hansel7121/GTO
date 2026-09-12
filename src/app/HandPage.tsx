@@ -9,7 +9,7 @@ import { grade } from '../scoring/score'
 import { db, loadSettings, newId } from '../storage/db'
 import type { SolveProgress } from '../solver/worker'
 import { AnalysisCard } from '../ui/AnalysisCard'
-import { CardChip, CardPicker } from '../ui/Cards'
+import { CardChip, CardPicker, REVEAL_MS } from '../ui/Cards'
 import { analyzeDecision, effectiveMode, engineConfig } from './analyze'
 import { makeFmt, trim } from './format'
 import { createHand } from './hands'
@@ -34,6 +34,13 @@ export function HandPage() {
   const jobs = useRef(new Map<string, Promise<void>>())
   const [grading, setGrading] = useState<Record<string, SolveProgress | 'running' | undefined>>({})
   const [actionError, setActionError] = useState('')
+  // hole cards are face-down by default; a tap peeks at them for a few seconds
+  const [revealed, setRevealed] = useState(false)
+  useEffect(() => {
+    if (!revealed) return
+    const t = setTimeout(() => setRevealed(false), REVEAL_MS)
+    return () => clearTimeout(t)
+  }, [revealed])
 
   const save = useCallback(async (patch: Partial<Hand>) => {
     await db.hands.update(hid!, patch)
@@ -252,10 +259,23 @@ export function HandPage() {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-xs text-slate-400 w-14">My hand</div>
-          <div className="flex gap-1" onClick={() => setPicker({ kind: 'hero' })}>
-            <CardChip card={hand.heroCards?.[0] ?? null} />
-            <CardChip card={hand.heroCards?.[1] ?? null} />
+          <div className="text-xs text-slate-400 w-14">
+            My hand
+            {hand.heroCards && (
+              <button type="button" onClick={() => { setRevealed(false); setPicker({ kind: 'hero' }) }} className="block text-sky-400 underline">
+                change
+              </button>
+            )}
+          </div>
+          <div className="flex gap-1">
+            {[0, 1].map((i) => (
+              <CardChip
+                key={i}
+                card={hand.heroCards?.[i] ?? null}
+                hidden={!revealed}
+                onClick={() => (hand.heroCards ? setRevealed((r) => !r) : setPicker({ kind: 'hero' }))}
+              />
+            ))}
           </div>
           <div className="text-xs text-slate-400 w-12 ml-2">Board</div>
           <div className="flex gap-1">
@@ -359,7 +379,7 @@ export function HandPage() {
       </div>
 
       {picker?.kind === 'hero' && (
-        <CardPicker title="Your hole cards" count={2} used={usedCards} initial={hand.heroCards ?? []} onCancel={() => setPicker(null)} onDone={(c) => { save({ heroCards: [c[0], c[1]] }); setLive(null); setPicker(null) }} />
+        <CardPicker title="Your hole cards" count={2} used={usedCards} initial={hand.heroCards ?? []} onCancel={() => setPicker(null)} onDone={(c) => { save({ heroCards: [c[0], c[1]] }); setLive(null); setRevealed(false); setPicker(null) }} />
       )}
       {picker?.kind === 'board' && (
         <CardPicker

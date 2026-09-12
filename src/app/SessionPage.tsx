@@ -1,12 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { handClass } from '../domain/cards'
 import type { Hand } from '../domain/types'
 import { EV_TOLERANCE_PCT, FREQ_TOLERANCE, handStats, sessionStats } from '../scoring/score'
 import { db } from '../storage/db'
 import { createHand } from './hands'
-import { CardRow } from '../ui/Cards'
+import { CardRow, REVEAL_MS } from '../ui/Cards'
 import { fmtDate, trim } from './format'
 
 export function SessionPage() {
@@ -15,6 +15,12 @@ export function SessionPage() {
   const session = useLiveQuery(() => db.sessions.get(sid!), [sid])
   const hands = useLiveQuery(() => db.hands.where('sessionId').equals(sid!).sortBy('handNo'), [sid], [] as Hand[])
   const [showFormula, setShowFormula] = useState(false)
+  const [showCards, setShowCards] = useState(false)
+  useEffect(() => {
+    if (!showCards) return
+    const t = setTimeout(() => setShowCards(false), REVEAL_MS)
+    return () => clearTimeout(t)
+  }, [showCards])
   if (!session) return <p className="text-slate-400">Loading…</p>
   const stats = sessionStats(hands)
 
@@ -94,6 +100,11 @@ export function SessionPage() {
         + New hand
       </button>
 
+      {hands.length > 0 && (
+        <button type="button" onClick={() => setShowCards((v) => !v)} className="text-xs text-slate-400">
+          {showCards ? '🙈 hide my cards' : '👁 show my cards'}
+        </button>
+      )}
       <div className="space-y-2">
         {hands
           .slice()
@@ -103,10 +114,10 @@ export function SessionPage() {
             return (
               <Link key={h.id} to={`/session/${session.id}/hand/${h.id}`} className="flex items-center gap-3 rounded-lg bg-slate-900 p-2">
                 <div className="text-slate-400 w-8 text-sm">#{h.handNo}</div>
-                {h.heroCards ? <CardRow cards={h.heroCards} size="sm" /> : <span className="text-slate-500 text-sm">no cards</span>}
+                {h.heroCards ? <CardRow cards={h.heroCards} size="sm" hidden={!showCards} /> : <span className="text-slate-500 text-sm">no cards</span>}
                 <div className="text-sm text-slate-300 flex-1">
                   {h.heroSeat}
-                  {h.heroCards ? ` · ${handClass(h.heroCards[0], h.heroCards[1])}` : ''}
+                  {h.heroCards && showCards ? ` · ${handClass(h.heroCards[0], h.heroCards[1])}` : ''}
                   {h.board.length > 0 && (
                     <span className="ml-2 inline-flex">
                       <CardRow cards={h.board} size="sm" />

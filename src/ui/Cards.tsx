@@ -3,8 +3,34 @@ import { RANKS, SUIT_SYMBOL, cardToString, rankOf, suitOf, type Card } from '../
 
 const SUIT_BG = ['bg-emerald-600', 'bg-sky-600', 'bg-rose-600', 'bg-slate-600']
 
-export function CardChip({ card, size = 'md', onClick, dim }: { card: Card | null; size?: 'sm' | 'md' | 'lg'; onClick?: () => void; dim?: boolean }) {
+export function CardChip({
+  card,
+  size = 'md',
+  onClick,
+  dim,
+  hidden,
+}: {
+  card: Card | null
+  size?: 'sm' | 'md' | 'lg'
+  onClick?: () => void
+  dim?: boolean
+  /** Render face-down (card back) so people next to you cannot see it. */
+  hidden?: boolean
+}) {
   const cls = size === 'sm' ? 'w-7 h-9 text-xs' : size === 'lg' ? 'w-14 h-20 text-2xl' : 'w-10 h-14 text-base'
+  if (card !== null && hidden) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="hidden card"
+        className={`${cls} rounded-md border-2 border-slate-500 bg-slate-800 shadow flex items-center justify-center`}
+        style={{ backgroundImage: 'repeating-linear-gradient(45deg, #334155 0 3px, #1e293b 3px 6px)' }}
+      >
+        <span className="text-slate-400 text-xs">👁</span>
+      </button>
+    )
+  }
   if (card === null) {
     return (
       <button type="button" onClick={onClick} className={`${cls} rounded-md border-2 border-dashed border-slate-500 text-slate-400 flex items-center justify-center`}>
@@ -24,15 +50,18 @@ export function CardChip({ card, size = 'md', onClick, dim }: { card: Card | nul
   )
 }
 
-export function CardRow({ cards, size = 'md' }: { cards: Card[]; size?: 'sm' | 'md' | 'lg' }) {
+export function CardRow({ cards, size = 'md', hidden, onClick }: { cards: Card[]; size?: 'sm' | 'md' | 'lg'; hidden?: boolean; onClick?: () => void }) {
   return (
     <div className="flex gap-1">
       {cards.map((c) => (
-        <CardChip key={c} card={c} size={size} />
+        <CardChip key={c} card={c} size={size} hidden={hidden} onClick={onClick} />
       ))}
     </div>
   )
 }
+
+/** How long a tapped hand stays revealed before it hides itself again (ms). */
+export const REVEAL_MS = 4000
 
 /** Full-screen card picker. Picks `count` cards, excluding `used`. */
 export function CardPicker({
