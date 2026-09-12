@@ -1,0 +1,9 @@
+node_modules
+dist
+dev-dist
+vendor/wasm-postflop/rust/*/target
+vendor/wasm-postflop/pkg
+vendor/wasm-postflop/node_modules
+vendor/postflop-solver/target
+*.log
+.DS_Store
