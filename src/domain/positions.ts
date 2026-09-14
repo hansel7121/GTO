@@ -57,7 +57,8 @@ export function blindFor(n: number, seat: Seat): number {
  * Chart positions available for a table size. Six-max charts cover UTG/HJ/CO/BTN/SB/BB;
  * full-ring charts cover UTG/UTG+1/LJ/HJ/CO/BTN/SB/BB. Extra early seats collapse onto UTG.
  */
-export type ChartFormat = '6max' | 'fullring'
+/** '5max30' = the 5-handed 30bb charts used by the preflop trainer (no seat mapping). */
+export type ChartFormat = '6max' | 'fullring' | '5max30'
 
 export function chartFormatFor(n: number): ChartFormat {
   return n <= 6 ? '6max' : 'fullring'

@@ -19,6 +19,9 @@ export function HomePage() {
       ) : (
         <NewSessionForm onClose={() => setCreating(false)} last={sessions[0]} />
       )}
+      <Link to="/trainer" className="block w-full py-3 rounded-xl bg-slate-800 border border-slate-700 text-center font-semibold">
+        ♣ Preflop drill <span className="text-slate-400 font-normal text-sm">— 5-max, 30bb, GTO opponents</span>
+      </Link>
       <div className="space-y-2">
         {sessions.length === 0 && <p className="text-slate-400 text-sm">No sessions yet. Start one when you sit down.</p>}
         {sessions.map((s) => {

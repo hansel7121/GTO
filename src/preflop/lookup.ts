@@ -1,4 +1,4 @@
-import { chartFormatFor, chartSeat, type Seat } from '../domain/positions'
+import { chartFormatFor, chartSeat, type ChartFormat, type Seat } from '../domain/positions'
 import type { Action } from '../domain/types'
 import { CHART_INDEX, chartKey, type Chart, type Scenario } from './charts'
 import { parseRange, type Range } from './range'
@@ -24,6 +24,7 @@ export interface ChartHit {
 /**
  * Finds a chart for a scenario. RFI uses the format-specific chart (6-max / full-ring);
  * everything else only exists for 6-max and is mapped onto it for bigger tables.
+ * With an explicit `format` (e.g. '5max30' for the trainer) the key is looked up directly, no mapping.
  */
 export function findChart(
   resolve: ChartResolver,
@@ -31,7 +32,13 @@ export function findChart(
   scenario: Scenario,
   hero: Seat,
   villain?: Seat,
+  explicitFormat?: ChartFormat,
 ): ChartHit | null {
+  if (explicitFormat) {
+    const direct = resolve(chartKey(explicitFormat, scenario, hero, scenario === 'COLD_4BET' ? undefined : villain))
+    return direct ? { chart: direct, mapped: false } : null
+  }
+  if (scenario === 'COLD_4BET') return null
   const format = chartFormatFor(tableSize)
   if (scenario === 'RFI') {
     const direct = resolve(chartKey(format, 'RFI', chartSeat(tableSize, hero)))

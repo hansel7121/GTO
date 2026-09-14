@@ -1,7 +1,8 @@
 import { handClass, type Card } from '../domain/cards'
 import type { HandState } from '../domain/engine'
-import { isOutOfPosition, type Seat } from '../domain/positions'
+import { isOutOfPosition, type ChartFormat, type Seat } from '../domain/positions'
 import type { Action, Analysis, AnalysisOption } from '../domain/types'
+import type { Scenario } from './charts'
 import { chartFrequencies, chartRange, classifyPreflop, findChart, recommendedRaiseTo, type ChartResolver } from './lookup'
 import { multiplyRanges, parseRange, type Range } from './range'
 
@@ -12,6 +13,10 @@ export interface PreflopContext {
   state: HandState // state at hero's decision
   preflopActions: Action[] // actions so far this street (before hero acts)
   resolve: ChartResolver
+  /** Explicit chart set (e.g. '5max30'); default = pick by table size with seat mapping. */
+  chartFormat?: ChartFormat
+  /** Raise sizing override ("raise to" in bb); default = the 100bb guidance in `recommendedRaiseTo`. */
+  raiseTo?: (scenario: Scenario, hero: Seat, heroInPosition: boolean, currentBet: number) => number
 }
 
 function bigBlindSeat(): Seat {
@@ -37,28 +42,36 @@ export function analyzePreflop(ctx: PreflopContext): Analysis {
   if (spot.scenario === 'BB_VS_LIMP') {
     return none('Big blind facing limps: checking is free and no public GTO chart covers iso-raising here. Not graded.')
   }
-  if (spot.scenario === 'COLD_4BET' || spot.scenario === 'VS_5BET' || spot.scenario === 'UNKNOWN') {
+  if (spot.scenario === 'VS_5BET' || spot.scenario === 'UNKNOWN') {
+    return none('No chart for this spot.')
+  }
+  if (spot.scenario === 'COLD_4BET' && !ctx.chartFormat) {
     return none('No chart for this spot.')
   }
 
   const scenario = spot.scenario
   const villain = scenario === 'RFI' ? undefined : spot.raiser
-  const hit = findChart(ctx.resolve, ctx.tableSize, scenario, ctx.hero, villain)
+  const hit = findChart(ctx.resolve, ctx.tableSize, scenario, ctx.hero, villain, ctx.chartFormat)
   if (!hit) return none(`No ${scenario} chart for ${ctx.hero}${villain ? ' vs ' + villain : ''}.`)
   const { chart, mapped } = hit
+  if (scenario === 'COLD_4BET') {
+    // a chart exists for this format after all: drop the classifier's "not graded" note
+    const i = notes.findIndex((n) => n.startsWith('Cold 4-bet spot'))
+    if (i >= 0) notes.splice(i, 1)
+  }
   if (mapped) notes.push(`Using the ${chart.hero}${chart.villain ? ' vs ' + chart.villain : ''} ${chart.format} chart for this seat (approximate).`)
   if (chart.fidelity === 'approx') notes.push('Chart is an approximation of published solver ranges. Import a solver export in Settings for exact frequencies.')
 
   const f = chartFrequencies(chart, cls)
   const heroIp = villain ? !isOutOfPosition(ctx.tableSize, ctx.hero, villain) : true
-  const raiseTo = recommendedRaiseTo(scenario, ctx.hero, heroIp, ctx.state.currentBet)
+  const raiseTo = (ctx.raiseTo ?? recommendedRaiseTo)(scenario, ctx.hero, heroIp, ctx.state.currentBet)
   const options: AnalysisOption[] = []
 
-  const raiseLabel = scenario === 'RFI' ? 'Raise' : scenario === 'VS_RFI' ? '3-bet' : scenario === 'VS_3BET' ? '4-bet' : '5-bet'
-  if (f.allin > 0 || scenario === 'VS_4BET') {
+  const raiseLabel = scenario === 'RFI' ? 'Raise' : scenario === 'VS_RFI' ? '3-bet' : scenario === 'VS_3BET' || scenario === 'COLD_4BET' ? '4-bet' : '5-bet'
+  if (f.allin > 0 || scenario === 'VS_4BET' || scenario === 'COLD_4BET') {
     options.push({ label: 'All-in', kind: 'allin', freq: f.allin })
   }
-  if (scenario !== 'VS_4BET' || f.raise > 0) {
+  if ((scenario !== 'VS_4BET' && scenario !== 'COLD_4BET') || f.raise > 0) {
     options.push({ label: `${raiseLabel} to ${raiseTo}bb`, kind: 'raise', amount: raiseTo, freq: f.raise })
   }
   if (scenario !== 'RFI' || spot.limpers.length > 0) {

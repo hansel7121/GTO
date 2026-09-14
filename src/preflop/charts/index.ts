@@ -1,33 +1,14 @@
-import type { Seat, ChartFormat } from '../../domain/positions'
+import type { ChartFormat, Seat } from '../../domain/positions'
+import { CHARTS_30BB } from './charts30'
+import { chartKey, type Chart, type Scenario } from './types'
 
-export type Scenario = 'RFI' | 'VS_RFI' | 'VS_3BET' | 'VS_4BET'
-
-/**
- * A preflop chart: range strings per aggressive/passive action. Anything not covered folds
- * (or checks, for the BB with no raise in front). Weights use the solver ":w" syntax.
- */
-export interface Chart {
-  key: string
-  format: ChartFormat
-  scenario: Scenario
-  hero: Seat
-  villain?: Seat
-  actions: { raise?: string; call?: string; allin?: string; limp?: string }
-  source: string
-  sourceLabel: string
-  /** 'published' = transcribed verbatim from the cited source; 'approx' = editorial transcription of typical solver output. */
-  fidelity: 'published' | 'approx'
-  note?: string
-}
+export { chartKey, type Chart, type Scenario } from './types'
 
 export const POKERCOACHING_URL = 'https://pokercoaching.com/preflop-charts/'
 export const POKERCOACHING_LABEL = 'PokerCoaching.com free GTO preflop charts (100bb cash, text ranges on page)'
 export const APPROX_LABEL =
   'Bundled approximation of published 100bb cash solver ranges (GTO Wizard-style, 2.5bb open / 3bb SB open). Import your own solver export in Settings for exact frequencies.'
 
-export function chartKey(format: ChartFormat, scenario: Scenario, hero: Seat, villain?: Seat): string {
-  return villain ? `${format}:${scenario}:${hero}:${villain}` : `${format}:${scenario}:${hero}`
-}
 
 const rfi = (format: ChartFormat, hero: Seat, raise: string, extra: Partial<Chart> = {}): Chart => ({
   key: chartKey(format, 'RFI', hero),
@@ -267,6 +248,7 @@ export const BUNDLED_CHARTS: Chart[] = [
   ...VS_RFI_6MAX,
   ...VS_3BET_6MAX,
   ...VS_4BET_6MAX,
+  ...CHARTS_30BB,
 ]
 
 export const CHART_INDEX: Map<string, Chart> = new Map(BUNDLED_CHARTS.map((c) => [c.key, c]))

@@ -24,6 +24,16 @@ Anything that has no reputable model (cold 4-bet spots, limped pots for the big 
 | `Preflop chart` | Chart lookup. RFI charts are transcribed verbatim from the cited source; facing-raise / 3-bet / 4-bet charts are bundled approximations of published solver output — import your own ranges in Settings for exact frequencies. |
 | `Equity / pot odds · approx` | Multiway / fallback math. |
 
+## Preflop drill (`/#/trainer`)
+
+A PokerNow-styled 5-handed table at 30bb (SB 0.5 / BB 1, no ante) that deals you random spots and grades every preflop decision:
+
+- Random seat and hand each deal; the four opponents play the bundled 30bb charts (sampled at the chart's mixed frequencies), so you face opens, 3-bets, 4-bet jams and cold spots exactly as often as the model does.
+- Fold / call / check / raise to any size (presets + slider) / all-in, with keyboard shortcuts (F, C, R, A, Enter). A decision is correct when the chart plays your action at ≥ 10% frequency.
+- The hand keeps going preflop after you act (villains respond), so one deal can contain several graded decisions. Hands where you never get to act are skipped.
+- Session and all-time accuracy are shown; every graded decision is stored in IndexedDB (`drills`, included in export/import).
+- Charts: `src/preflop/charts/charts30.ts` — RFI, facing an open (3-bet / call / jam), facing a 3-bet (jam / call), facing a 4-bet jam, and a cold-4-bet chart. They are editorial approximations of 30bb solver output (labelled approx); every one of them can be replaced in Settings → Preflop ranges (`5max30 …`). Open 2.5bb (SB 3bb), 3-bet 3x IP / 3.5x OOP, 4-bets are jams; limping is not modelled (a limp is graded as a mistake and later decisions in that hand are off-model).
+
 ## Solver modes (Settings)
 
 - **Full** — always solve from the flop (the way GTO Wizard / Pio solutions are built). Needs ~0.5–1 GB and a few minutes per hand on a multi-core laptop; too slow single-threaded on a phone.

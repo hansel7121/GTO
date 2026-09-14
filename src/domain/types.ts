@@ -84,6 +84,18 @@ export interface Hand {
   result?: number // hero net result in bb, optional
 }
 
+/** One graded decision from the preflop trainer. */
+export interface Drill {
+  id: string
+  createdAt: number
+  heroSeat: Seat
+  cls: string // 169-hand class, e.g. "AKs"
+  scenario: string // e.g. "VS_RFI vs BTN"
+  chosen: string // option label hero picked
+  best: string // highest-frequency option label
+  correct: boolean
+}
+
 export interface RangeOverride {
   id: string // chart key
   actions: { raise?: string; call?: string; allin?: string; limp?: string }
