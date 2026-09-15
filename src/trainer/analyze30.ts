@@ -1,29 +1,35 @@
 import { handClass, type Card } from '../domain/cards'
-import { EPS, type EngineConfig, type HandState } from '../domain/engine'
-import type { ChartFormat, Seat } from '../domain/positions'
+import { EPS, type HandState } from '../domain/engine'
+import type { Seat } from '../domain/positions'
 import type { Action, Analysis, AnalysisOption } from '../domain/types'
 import { analyzePreflop } from '../preflop/analyze'
 import type { Scenario } from '../preflop/charts'
-import { chartFrequencies, findChart, type ChartResolver } from '../preflop/lookup'
+import { chartFrequencies, findChart, recommendedRaiseTo, type ChartResolver } from '../preflop/lookup'
+import { chartSetFor, type TrainerSettings } from './config'
 
-/** The trainer's fixed game: 5-handed, 30bb, no straddle / ante. */
-export const TRAINER_CFG: EngineConfig = { tableSize: 5, stackBb: 30, straddleBb: 0 }
-export const TRAINER_FORMAT: ChartFormat = '5max30'
-
-/** Fraction of the effective stack above which a raise is just a jam. */
+/** Fraction of the starting stack above which a raise is just a jam. */
 const JAM_FRACTION = 0.4
 
 /**
- * "Raise to" sizes (bb) matching the 30bb charts: open 2.5 (SB 3), 3-bet 3x IP / 3.5x OOP,
+ * "Raise to" sizes (bb) for the 30bb chart set: open 2.5 (SB 3), 3-bet 3x IP / 3.5x OOP,
  * anything deeper in the tree is all-in.
  */
-export function raiseTo30(scenario: Scenario, hero: Seat, heroInPosition: boolean, currentBet: number): number {
+export function raiseTo30(scenario: Scenario, hero: Seat, heroInPosition: boolean, currentBet: number, stackBb = 30): number {
   if (scenario === 'RFI') return hero === 'SB' ? 3 : 2.5
   if (scenario === 'VS_RFI') {
     const to = Math.round(currentBet * (heroInPosition ? 3 : 3.5) * 10) / 10
-    return to >= TRAINER_CFG.stackBb * JAM_FRACTION ? TRAINER_CFG.stackBb : to
+    return to >= stackBb * JAM_FRACTION ? stackBb : to
   }
-  return TRAINER_CFG.stackBb
+  return stackBb
+}
+
+/** Sizing function for the active chart set; any raise past 40% of the stack becomes a jam. */
+export function raiseToFor(settings: TrainerSettings) {
+  const deep = chartSetFor(settings.stackBb) !== '5max30'
+  return (scenario: Scenario, hero: Seat, ip: boolean, currentBet: number): number => {
+    const to = deep ? recommendedRaiseTo(scenario, hero, ip, currentBet) : raiseTo30(scenario, hero, ip, currentBet, settings.stackBb)
+    return to >= settings.stackBb * JAM_FRACTION ? settings.stackBb : to
+  }
 }
 
 /** True when the bet `seat` faces is (effectively) an all-in: it cannot be raised. */
@@ -42,23 +48,31 @@ export function facingAllIn(state: HandState, seat: Seat): boolean {
  *    (plus its flat mass when the chart itself is defined against a jam, i.e. VS_4BET).
  *  - a zero-frequency non-all-in raise is dropped when the chart jams instead.
  */
-export function analyzeTrainer(hero: Seat, heroCards: [Card, Card], state: HandState, preflopActions: Action[], resolve: ChartResolver): Analysis {
+export function analyzeTrainer(
+  settings: TrainerSettings,
+  hero: Seat,
+  heroCards: [Card, Card],
+  state: HandState,
+  preflopActions: Action[],
+  resolve: ChartResolver,
+): Analysis {
   const base = analyzePreflop({
-    tableSize: TRAINER_CFG.tableSize,
+    tableSize: settings.players,
     hero,
     heroCards,
     state,
     preflopActions,
     resolve,
-    chartFormat: TRAINER_FORMAT,
-    raiseTo: raiseTo30,
+    chartFormat: chartSetFor(settings.stackBb),
+    raiseTo: raiseToFor(settings),
   })
   const notes = base.notes.filter((n) => !n.includes('Import a solver export'))
   if (base.options.length === 0) {
     // Off-model line (e.g. a limp in front). If hero faces a jam, grade it with the generic
     // cold jam-calling range; otherwise leave it ungraded.
     if (!facingAllIn(state, hero)) return base
-    const generic = findChart(resolve, TRAINER_CFG.tableSize, 'COLD_4BET', hero, undefined, TRAINER_FORMAT)
+    // the 30bb cold chart doubles as the generic "call a jam" range at any depth
+    const generic = findChart(resolve, settings.players, 'COLD_4BET', hero, undefined, '5max30')
     if (!generic) return base
     const f = chartFrequencies(generic.chart, handClass(heroCards[0], heroCards[1]))
     const call = Math.min(1, f.allin + f.raise)

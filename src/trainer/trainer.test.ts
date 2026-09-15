@@ -5,10 +5,13 @@ import type { Seat } from '../domain/positions'
 import { CHART_INDEX, chartKey } from '../preflop/charts'
 import { SEATS_30BB } from '../preflop/charts/charts30'
 import { bundledResolver } from '../preflop/lookup'
-import { TRAINER_CFG, analyzeTrainer, facingAllIn, raiseTo30 } from './analyze30'
+import { analyzeTrainer, facingAllIn, raiseTo30 } from './analyze30'
+import { DEFAULT_TRAINER_SETTINGS, engineCfg } from './config'
 import { advance, dealHand, heroAct, legalRaise, makeRng, outcomeOf, stateOf } from './sim'
 
 const c = (s: string) => cardFromString(s)
+const S = DEFAULT_TRAINER_SETTINGS
+const TRAINER_CFG_ENGINE = engineCfg(S)
 
 describe('30bb chart set', () => {
   it('covers every seat pair the 5-handed tree can reach', () => {
@@ -31,11 +34,11 @@ describe('30bb chart set', () => {
 
 describe('trainer analysis', () => {
   it('HJ opens AA, folds 72o', () => {
-    const st = computeState(TRAINER_CFG, 0, [])
-    const a = analyzeTrainer('HJ', [c('Ah'), c('Ad')], st, [], bundledResolver)
+    const st = computeState(TRAINER_CFG_ENGINE, 0, [])
+    const a = analyzeTrainer(S, 'HJ', [c('Ah'), c('Ad')], st, [], bundledResolver)
     expect(a.options[a.bestIndex].kind).toBe('raise')
     expect(a.options[a.bestIndex].amount).toBe(2.5)
-    const b = analyzeTrainer('HJ', [c('7h'), c('2d')], st, [], bundledResolver)
+    const b = analyzeTrainer(S, 'HJ', [c('7h'), c('2d')], st, [], bundledResolver)
     expect(b.options[b.bestIndex].kind).toBe('fold')
   })
   it('BB defends wide vs BTN but folds trash', () => {
@@ -45,13 +48,13 @@ describe('trainer analysis', () => {
       { seat: 'BTN', kind: 'raise', amount: 2.5 },
       { seat: 'SB', kind: 'fold' },
     ] as const
-    const st = computeState(TRAINER_CFG, 0, [...acts])
+    const st = computeState(TRAINER_CFG_ENGINE, 0, [...acts])
     expect(st.toAct).toBe('BB')
-    const a = analyzeTrainer('BB', [c('9h'), c('8h')], st, [...acts], bundledResolver)
+    const a = analyzeTrainer(S, 'BB', [c('9h'), c('8h')], st, [...acts], bundledResolver)
     expect(a.options[a.bestIndex].kind).toBe('call')
-    const b = analyzeTrainer('BB', [c('7c'), c('2d')], st, [...acts], bundledResolver)
+    const b = analyzeTrainer(S, 'BB', [c('7c'), c('2d')], st, [...acts], bundledResolver)
     expect(b.options[b.bestIndex].kind).toBe('fold')
-    const j = analyzeTrainer('BB', [c('Ac'), c('Ad')], st, [...acts], bundledResolver)
+    const j = analyzeTrainer(S, 'BB', [c('Ac'), c('Ad')], st, [...acts], bundledResolver)
     expect(j.options[j.bestIndex].kind).toBe('raise')
     expect(j.options[j.bestIndex].amount).toBe(raiseTo30('VS_RFI', 'BB', false, 2.5))
   })
@@ -63,13 +66,13 @@ describe('trainer analysis', () => {
       { seat: 'SB', kind: 'allin' },
       { seat: 'BB', kind: 'fold' },
     ] as const
-    const st = computeState(TRAINER_CFG, 0, [...acts])
+    const st = computeState(TRAINER_CFG_ENGINE, 0, [...acts])
     expect(st.toAct).toBe('HJ')
     expect(facingAllIn(st, 'HJ')).toBe(true)
-    const a = analyzeTrainer('HJ', [c('Kc'), c('Kd')], st, [...acts], bundledResolver)
+    const a = analyzeTrainer(S, 'HJ', [c('Kc'), c('Kd')], st, [...acts], bundledResolver)
     expect(a.options.map((o) => o.kind)).toEqual(['call', 'fold'])
     expect(a.options[a.bestIndex].kind).toBe('call')
-    const b = analyzeTrainer('HJ', [c('7c'), c('6c')], st, [...acts], bundledResolver)
+    const b = analyzeTrainer(S, 'HJ', [c('7c'), c('6c')], st, [...acts], bundledResolver)
     expect(b.options[b.bestIndex].kind).toBe('fold')
   })
   it('4-bets are jams at 30bb', () => {
@@ -86,7 +89,7 @@ describe('simulation', () => {
     const outcomes = new Set<string>()
     let threeBets = 0
     for (let i = 0; i < 1000; i++) {
-      const hand = dealHand(rand, i)
+      const hand = dealHand(S, rand, i)
       seats.add(hand.heroSeat)
       let st = advance(hand, bundledResolver, rand)
       let guard = 0
@@ -126,7 +129,7 @@ describe('simulation', () => {
   it('survives random hero play; only limp lines can be ungraded', () => {
     const rand = makeRng(7)
     for (let i = 0; i < 1500; i++) {
-      const hand = dealHand(rand, i)
+      const hand = dealHand(S, rand, i)
       let st = advance(hand, bundledResolver, rand)
       let guard = 0
       while (st.toAct === hand.heroSeat && !st.handOver && guard++ < 10) {
@@ -151,5 +154,43 @@ describe('simulation', () => {
       }
       expect(stateOf(hand).error).toBeUndefined()
     }
+  })
+
+  it.each([
+    [{ players: 6, stackBb: 30 }],
+    [{ players: 3, stackBb: 20 }],
+    [{ players: 6, stackBb: 100 }],
+    [{ players: 9, stackBb: 100 }],
+    [{ players: 5, stackBb: 50 }],
+  ])('other table shapes %o: legal lines, graded hero spots', (cfg) => {
+    const rand = makeRng(11)
+    let decisions = 0
+    let graded = 0
+    for (let i = 0; i < 300; i++) {
+      const hand = dealHand(cfg, rand, i)
+      let st = advance(hand, bundledResolver, rand)
+      let guard = 0
+      while (st.toAct === hand.heroSeat && !st.handOver && guard++ < 10) {
+        const d = hand.decisions[hand.decisions.length - 1]
+        decisions++
+        if (d.analysis.options.length > 0) graded++
+        const best = d.analysis.options[d.analysis.bestIndex]
+        const me = st.players[hand.heroSeat]
+        const toCall = st.currentBet - me.committed
+        const a = !best || best.kind === 'fold'
+          ? { seat: hand.heroSeat, kind: toCall > 0 ? ('fold' as const) : ('check' as const) }
+          : best.kind === 'raise'
+            ? legalRaise(st, hand.heroSeat, best.amount ?? st.minRaiseTo)
+            : best.kind === 'allin'
+              ? { seat: hand.heroSeat, kind: 'allin' as const }
+              : { seat: hand.heroSeat, kind: toCall > 0 ? ('call' as const) : ('check' as const) }
+        heroAct(hand, a)
+        st = advance(hand, bundledResolver, rand)
+      }
+      expect(stateOf(hand).error).toBeUndefined()
+      expect(hand.seats.length).toBe(cfg.players)
+    }
+    expect(decisions).toBeGreaterThan(150)
+    expect(graded / decisions).toBeGreaterThan(0.97)
   })
 })

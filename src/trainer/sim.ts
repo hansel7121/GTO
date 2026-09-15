@@ -1,10 +1,11 @@
 import { ALL_CARDS, handClass, type Card } from '../domain/cards'
 import { EPS, computeState, type HandState } from '../domain/engine'
-import { seatsFor, type Seat } from '../domain/positions'
+import type { Seat } from '../domain/positions'
 import type { Action, Analysis } from '../domain/types'
 import type { ChartResolver } from '../preflop/lookup'
 import { grade } from '../scoring/score'
-import { TRAINER_CFG, analyzeTrainer } from './analyze30'
+import { analyzeTrainer } from './analyze30'
+import { engineCfg, trainerSeats, type TrainerSettings } from './config'
 
 export type Rng = () => number
 
@@ -31,27 +32,30 @@ export interface TrainerDecision {
 
 export interface TrainerHand {
   id: number
+  settings: TrainerSettings
+  seats: Seat[]
   heroSeat: Seat
   cards: Record<string, [Card, Card]>
   actions: Action[]
   decisions: TrainerDecision[]
 }
 
-export const TRAINER_SEATS: Seat[] = seatsFor(TRAINER_CFG.tableSize)
-
-export function dealHand(rand: Rng, id: number, heroSeat?: Seat): TrainerHand {
+export function dealHand(settings: TrainerSettings, rand: Rng, id: number, heroSeat?: Seat): TrainerHand {
+  const seats = trainerSeats(settings)
   const deck = [...ALL_CARDS]
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1))
     ;[deck[i], deck[j]] = [deck[j], deck[i]]
   }
   const cards: Record<string, [Card, Card]> = {}
-  TRAINER_SEATS.forEach((s, i) => {
+  seats.forEach((s, i) => {
     cards[s] = [deck[i * 2], deck[i * 2 + 1]]
   })
   return {
     id,
-    heroSeat: heroSeat ?? TRAINER_SEATS[Math.floor(rand() * TRAINER_SEATS.length)],
+    settings,
+    seats,
+    heroSeat: heroSeat ?? seats[Math.floor(rand() * seats.length)],
     cards,
     actions: [],
     decisions: [],
@@ -59,7 +63,7 @@ export function dealHand(rand: Rng, id: number, heroSeat?: Seat): TrainerHand {
 }
 
 export function stateOf(hand: TrainerHand): HandState {
-  return computeState(TRAINER_CFG, 0, hand.actions)
+  return computeState(engineCfg(hand.settings), 0, hand.actions)
 }
 
 /** Clamp a "raise to" amount to something the engine accepts; a raise for the whole stack is an all-in. */
@@ -96,10 +100,11 @@ const PREMIUM = new Set(['AA', 'KK', 'QQ', 'AKs', 'AKo'])
  * A villain's action: sample from the chart frequencies for its spot. Spots with no chart
  * (5-bet trees etc.) fall back to premium-only continuing.
  */
-export function botAction(state: HandState, seat: Seat, cards: [Card, Card], actions: Action[], resolve: ChartResolver, rand: Rng): Action {
+export function botAction(hand: TrainerHand, state: HandState, seat: Seat, resolve: ChartResolver, rand: Rng): Action {
+  const cards = hand.cards[seat]
   const p = state.players[seat]
   const toCall = state.currentBet - p.committed
-  const analysis = analyzeTrainer(seat, cards, state, actions, resolve)
+  const analysis = analyzeTrainer(hand.settings, seat, cards, state, hand.actions, resolve)
   if (analysis.options.length === 0) {
     if (toCall <= EPS) return { seat, kind: 'check' }
     return PREMIUM.has(handClass(cards[0], cards[1])) ? { seat, kind: toCall >= p.stack - EPS ? 'call' : 'allin' } : { seat, kind: 'fold' }
@@ -130,12 +135,12 @@ export function advance(hand: TrainerHand, resolve: ChartResolver, rand: Rng): H
           actionIndex: hand.actions.length,
           potBb: state.pot,
           toCallBb: state.currentBet - me.committed,
-          analysis: analyzeTrainer(hand.heroSeat, hand.cards[hand.heroSeat], state, hand.actions, resolve),
+          analysis: analyzeTrainer(hand.settings, hand.heroSeat, hand.cards[hand.heroSeat], state, hand.actions, resolve),
         })
       }
       return state
     }
-    hand.actions.push(botAction(state, state.toAct, hand.cards[state.toAct], hand.actions, resolve, rand))
+    hand.actions.push(botAction(hand, state, state.toAct, resolve, rand))
   }
   throw new Error('Preflop did not terminate')
 }

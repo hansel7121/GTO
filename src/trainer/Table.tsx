@@ -5,24 +5,19 @@ import type { HandState } from '../domain/engine'
 import type { Seat } from '../domain/positions'
 import type { Action } from '../domain/types'
 import { PlayingCard } from './PlayingCard'
-import { TRAINER_SEATS } from './sim'
 
-/** Seat slots around the oval as % of the table box, clockwise from the hero at the bottom. */
-const SLOTS = [
-  { x: 50, y: 88 },
-  { x: 8, y: 60 },
-  { x: 24, y: 10 },
-  { x: 76, y: 10 },
-  { x: 92, y: 60 },
-]
-/** Phone layout: taller oval, side seats pulled in so the pods stay on screen. */
-const SLOTS_SMALL = [
-  { x: 50, y: 88 },
-  { x: 16, y: 58 },
-  { x: 27, y: 11 },
-  { x: 73, y: 11 },
-  { x: 84, y: 58 },
-]
+/**
+ * Seat slots around the oval as % of the table box, clockwise from the hero at the bottom.
+ * Phones get a narrower ellipse so the side pods stay on screen.
+ */
+function seatSlots(n: number, small: boolean): { x: number; y: number }[] {
+  const rx = small ? 34 : 43
+  const ry = small ? 39 : 39
+  return Array.from({ length: n }, (_, k) => {
+    const th = Math.PI / 2 + (2 * Math.PI * k) / n
+    return { x: 50 + rx * Math.cos(th), y: 50 + ry * Math.sin(th) }
+  })
+}
 
 function useIsSmall() {
   const [small, setSmall] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640)
@@ -51,13 +46,16 @@ function actionLabel(a: Action): string {
 }
 
 export function Table({
+  seats,
   hero,
   cards,
   state,
   actions,
   activeSeat,
   reveal,
+  stackBb,
 }: {
+  seats: Seat[]
   hero: Seat
   cards: Record<string, [Card, Card]>
   state: HandState
@@ -66,10 +64,11 @@ export function Table({
   activeSeat: Seat | null
   /** Show every remaining villain's cards (end of hand). */
   reveal: boolean
+  stackBb: number
 }) {
   const small = useIsSmall()
-  const slots = small ? SLOTS_SMALL : SLOTS
-  const heroIdx = TRAINER_SEATS.indexOf(hero)
+  const slots = seatSlots(seats.length, small)
+  const heroIdx = seats.indexOf(hero)
   const lastBySeat = new Map<Seat, Action>()
   for (const a of actions) lastBySeat.set(a.seat, a)
   return (
@@ -78,15 +77,17 @@ export function Table({
       <div className="absolute inset-[7%_3%] rounded-[50%] pn-rim">
         <div className="absolute inset-[10px] sm:inset-[14px] rounded-[50%] pn-felt flex flex-col items-center justify-center">
           <div className="font-black tracking-[0.15em] text-[clamp(18px,4.5vw,44px)] text-white/15">GTO TRAINER</div>
-          <div className="text-[clamp(8px,1.6vw,14px)] text-white/10 -mt-1">5-max · 30bb · preflop</div>
+          <div className="text-[clamp(8px,1.6vw,14px)] text-white/10 -mt-1">
+            {seats.length}-max · {trim(stackBb)}bb · preflop
+          </div>
         </div>
       </div>
       {/* pot */}
-      <div className="absolute left-1/2 top-[24%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1f1f1f]/90 border border-[#3a3a3a] text-white text-xs sm:text-sm px-3 py-0.5 tabular-nums">
+      <div className="absolute left-1/2 top-[34%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1f1f1f]/90 border border-[#3a3a3a] text-white text-xs sm:text-sm px-3 py-0.5 tabular-nums">
         {trim(state.pot)}
       </div>
-      {TRAINER_SEATS.map((seat, i) => {
-        const slot = slots[(i - heroIdx + TRAINER_SEATS.length) % TRAINER_SEATS.length]
+      {seats.map((seat, i) => {
+        const slot = slots[(i - heroIdx + seats.length) % seats.length]
         const p = state.players[seat]
         const isHero = seat === hero
         const last = lastBySeat.get(seat)

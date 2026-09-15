@@ -15,6 +15,11 @@ export function sixMaxSeat(tableSize: number, seat: Seat): Seat {
   return s
 }
 
+/** Map any seat onto the five seats of the 30bb chart set (extra early seats collapse onto HJ). */
+export function seat30(seat: Seat): Seat {
+  return seat === 'CO' || seat === 'BTN' || seat === 'SB' || seat === 'BB' ? seat : 'HJ'
+}
+
 export interface ChartHit {
   chart: Chart
   /** True when the requested position pair was mapped onto a different chart. */
@@ -34,20 +39,40 @@ export function findChart(
   villain?: Seat,
   explicitFormat?: ChartFormat,
 ): ChartHit | null {
+  if (explicitFormat === '5max30') {
+    let h = seat30(hero)
+    let v = villain ? seat30(villain) : undefined
+    if (v !== undefined && h === v) {
+      // both collapsed onto HJ: whoever acted later in the orbit takes the CO chart
+      if (scenario === 'VS_3BET') v = 'CO'
+      else h = 'CO'
+    }
+    const direct = resolve(chartKey(explicitFormat, scenario, h, scenario === 'COLD_4BET' ? undefined : v))
+    return direct ? { chart: direct, mapped: h !== hero || v !== villain } : null
+  }
   if (explicitFormat) {
     const direct = resolve(chartKey(explicitFormat, scenario, hero, scenario === 'COLD_4BET' ? undefined : villain))
     return direct ? { chart: direct, mapped: false } : null
   }
-  if (scenario === 'COLD_4BET') return null
   const format = chartFormatFor(tableSize)
+  if (scenario === 'COLD_4BET') {
+    const h = sixMaxSeat(tableSize, hero)
+    const c = resolve(chartKey('6max', 'COLD_4BET', h))
+    return c ? { chart: c, mapped: h !== hero } : null
+  }
   if (scenario === 'RFI') {
     const direct = resolve(chartKey(format, 'RFI', chartSeat(tableSize, hero)))
     if (direct) return { chart: direct, mapped: chartSeat(tableSize, hero) !== hero }
     const six = resolve(chartKey('6max', 'RFI', sixMaxSeat(tableSize, hero)))
     return six ? { chart: six, mapped: true } : null
   }
-  const h = sixMaxSeat(tableSize, hero)
-  const v = villain ? sixMaxSeat(tableSize, villain) : undefined
+  let h = sixMaxSeat(tableSize, hero)
+  let v = villain ? sixMaxSeat(tableSize, villain) : undefined
+  if (v !== undefined && h === v) {
+    // two early seats both collapsed onto UTG: whoever acted later in the orbit takes the HJ chart
+    if (scenario === 'VS_3BET') v = 'HJ'
+    else h = 'HJ'
+  }
   const c = resolve(chartKey('6max', scenario, h, v))
   if (c) return { chart: c, mapped: h !== hero || v !== villain }
   return null
@@ -131,7 +156,7 @@ export function classifyPreflop(hero: Seat, preflopActions: Action[], bigBlindSe
       if (callers.length > 0) notes.push('Cold-caller of the 3-bet present: chart is for heads-up (approximate).')
       return { scenario: 'VS_3BET', raiser: lastRaise.seat, opener, raises, limpers: [], callers, notes }
     }
-    notes.push('Cold 4-bet spot (a raise and a 3-bet in front of you): no public GTO chart; not graded.')
+    notes.push('Cold 4-bet spot (a raise and a 3-bet in front of you): graded with a generic approximate chart.')
     return { scenario: 'COLD_4BET', raiser: lastRaise.seat, opener, raises, limpers: [], callers, notes }
   }
   if (raises === 3) {

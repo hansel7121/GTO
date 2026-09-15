@@ -12,7 +12,7 @@ Log the hands you play in a live game and grade every decision against GTO, on y
   - **Multiway postflop** — no public GTO solution exists for multiway pots, so the app shows Monte-Carlo equity vs the preflop ranges plus textbook pot-odds / MDF / alpha math and grades call-vs-fold only. Bet/check decisions multiway are informational, not graded.
 - **Session accuracy**: correct ÷ graded decisions, total solver EV lost (bb), split by street and by engine (solver vs approximate). The exact rules are shown under "how is this scored?".
 
-Anything that has no reputable model (cold 4-bet spots, limped pots for the big blind, multiway bet/check, 5-bets) is explicitly left **ungraded** instead of being guessed.
+Anything that has no reputable model (limped pots for the big blind, multiway bet/check, 5-bets) is explicitly left **ungraded** instead of being guessed. Cold 4-bet spots use a generic approximate chart.
 
 ### Engines and honesty labels
 
@@ -26,7 +26,7 @@ Anything that has no reputable model (cold 4-bet spots, limped pots for the big 
 
 ## Preflop drill (`/#/trainer`)
 
-A PokerNow-styled 5-handed table at 30bb (SB 0.5 / BB 1, no ante) that deals you random spots and grades every preflop decision:
+A PokerNow-styled table (default 5-handed, 30bb; SB 0.5 / BB 1, no ante) that deals you random spots and grades every preflop decision. The ⚙ button sets stack depth (20–200bb) and players (3–9): depths up to 40bb grade with the 30bb 5-max charts, 50bb+ with the 100bb 6-max / full-ring cash charts, extra seats mapped onto the nearest chart seat.
 
 - Random seat and hand each deal; the four opponents play the bundled 30bb charts (sampled at the chart's mixed frequencies), so you face opens, 3-bets, 4-bet jams and cold spots exactly as often as the model does.
 - Fold / call / check / raise to any size (presets + slider) / all-in, with keyboard shortcuts (F, C, R, A, Enter). A decision is correct when the chart plays your action at ≥ 10% frequency.

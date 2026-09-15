@@ -45,20 +45,12 @@ export function analyzePreflop(ctx: PreflopContext): Analysis {
   if (spot.scenario === 'VS_5BET' || spot.scenario === 'UNKNOWN') {
     return none('No chart for this spot.')
   }
-  if (spot.scenario === 'COLD_4BET' && !ctx.chartFormat) {
-    return none('No chart for this spot.')
-  }
 
   const scenario = spot.scenario
   const villain = scenario === 'RFI' ? undefined : spot.raiser
   const hit = findChart(ctx.resolve, ctx.tableSize, scenario, ctx.hero, villain, ctx.chartFormat)
   if (!hit) return none(`No ${scenario} chart for ${ctx.hero}${villain ? ' vs ' + villain : ''}.`)
   const { chart, mapped } = hit
-  if (scenario === 'COLD_4BET') {
-    // a chart exists for this format after all: drop the classifier's "not graded" note
-    const i = notes.findIndex((n) => n.startsWith('Cold 4-bet spot'))
-    if (i >= 0) notes.splice(i, 1)
-  }
   if (mapped) notes.push(`Using the ${chart.hero}${chart.villain ? ' vs ' + chart.villain : ''} ${chart.format} chart for this seat (approximate).`)
   if (chart.fidelity === 'approx') notes.push('Chart is an approximation of published solver ranges. Import a solver export in Settings for exact frequencies.')
 

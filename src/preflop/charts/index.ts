@@ -242,12 +242,29 @@ const VS_4BET_6MAX: Chart[] = (() => {
   return out
 })()
 
+// ---------------------------------------------------------------------------
+// Cold 4-bet spot (an open and a 3-bet in front of hero, hero not involved): 4-bet the top,
+// cold-call a sliver. Approximate; same chart for every seat.
+// ---------------------------------------------------------------------------
+const COLD_4BET_6MAX: Chart[] = (['HJ', 'CO', 'BTN', 'SB', 'BB'] as Seat[]).map((hero) => ({
+  key: chartKey('6max', 'COLD_4BET', hero),
+  format: '6max' as ChartFormat,
+  scenario: 'COLD_4BET' as Scenario,
+  hero,
+  actions: { raise: 'AA,KK,AKs:0.5,A5s:0.25', call: 'QQ,JJ:0.5,TT:0.25,AKs:0.5,AKo:0.75,AQs:0.25' },
+  source: 'https://blog.gtowizard.com/',
+  sourceLabel: APPROX_LABEL,
+  fidelity: 'approx' as const,
+  note: 'Generic cold 4-bet range (any opener / 3-bettor).',
+}))
+
 export const BUNDLED_CHARTS: Chart[] = [
   ...RFI_6MAX,
   ...RFI_FULLRING,
   ...VS_RFI_6MAX,
   ...VS_3BET_6MAX,
   ...VS_4BET_6MAX,
+  ...COLD_4BET_6MAX,
   ...CHARTS_30BB,
 ]
 

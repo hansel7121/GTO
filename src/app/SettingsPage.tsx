@@ -158,11 +158,11 @@ function RangeImporter() {
         {chart.note ? ` — ${chart.note}` : ''}
       </div>
       <label className="block text-sm">
-        {chart.scenario === 'RFI' ? 'Raise' : chart.scenario === 'VS_RFI' ? '3-bet' : chart.scenario === 'VS_3BET' ? '4-bet' : chart.scenario === 'COLD_4BET' ? 'Cold 4-bet (all-in)' : '5-bet (all-in)'} range{' '}
-        <span className="text-slate-400">{fmtPct(check(chart.scenario === 'VS_4BET' || chart.scenario === 'COLD_4BET' ? allin : raise))}</span>
+        {chart.scenario === 'RFI' ? 'Raise' : chart.scenario === 'VS_RFI' ? '3-bet' : chart.scenario === 'VS_3BET' ? '4-bet' : chart.scenario === 'COLD_4BET' ? 'Cold 4-bet' : '5-bet (all-in)'} range{' '}
+        <span className="text-slate-400">{fmtPct(check(chart.scenario === 'VS_4BET' ? allin : raise))}</span>
         <textarea
-          value={chart.scenario === 'VS_4BET' || chart.scenario === 'COLD_4BET' ? allin : raise}
-          onChange={(e) => (chart.scenario === 'VS_4BET' || chart.scenario === 'COLD_4BET' ? setAllin(e.target.value) : setRaise(e.target.value))}
+          value={chart.scenario === 'VS_4BET' ? allin : raise}
+          onChange={(e) => (chart.scenario === 'VS_4BET' ? setAllin(e.target.value) : setRaise(e.target.value))}
           rows={3}
           className={inputCls + ' font-mono text-xs'}
         />
@@ -171,6 +171,12 @@ function RangeImporter() {
         <label className="block text-sm">
           Call range <span className="text-slate-400">{fmtPct(check(call))}</span>
           <textarea value={call} onChange={(e) => setCall(e.target.value)} rows={3} className={inputCls + ' font-mono text-xs'} />
+        </label>
+      )}
+      {chart.scenario === 'COLD_4BET' && (
+        <label className="block text-sm">
+          All-in range <span className="text-slate-400">{fmtPct(check(allin))}</span>
+          <textarea value={allin} onChange={(e) => setAllin(e.target.value)} rows={2} className={inputCls + ' font-mono text-xs'} />
         </label>
       )}
       {chart.scenario === 'VS_4BET' && (
