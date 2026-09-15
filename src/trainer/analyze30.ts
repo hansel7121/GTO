@@ -105,6 +105,11 @@ export function analyzeTrainer(
   } else {
     const hasJam = base.options.some((o) => o.kind === 'allin' && o.freq > 0)
     options = base.options.filter((o) => !(hasJam && o.kind === 'raise' && o.freq <= 0))
+    // open-limping is not part of the model: list it at 0% so a limp grades as a mistake
+    const toCall = state.currentBet - state.players[hero].committed
+    if (base.scenario === 'RFI' && toCall > EPS && !options.some((o) => o.kind === 'call')) {
+      options.splice(options.length - 1, 0, { label: 'Limp', kind: 'call', freq: 0 })
+    }
   }
   let bestIndex = 0
   for (let i = 1; i < options.length; i++) if (options[i].freq > options[bestIndex].freq) bestIndex = i

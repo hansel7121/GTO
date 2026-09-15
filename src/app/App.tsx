@@ -1,4 +1,5 @@
 import { HashRouter, Link, Route, Routes } from 'react-router-dom'
+import { GtoPage } from '../gto/GtoPage'
 import { TrainerPage } from '../trainer/TrainerPage'
 import { HandPage } from './HandPage'
 import { HomePage } from './HomePage'
@@ -11,6 +12,7 @@ export function App() {
       <Routes>
         {/* the trainer draws its own full-width table, outside the phone-sized shell */}
         <Route path="/trainer" element={<TrainerPage />} />
+        <Route path="/gto" element={<GtoPage />} />
         <Route path="*" element={<Shell />} />
       </Routes>
     </HashRouter>
@@ -25,6 +27,7 @@ function Shell() {
           ♠ GTO Trainer
         </Link>
         <nav className="flex gap-4 text-sm text-slate-300">
+          <Link to="/gto">GTO trainer</Link>
           <Link to="/trainer">Preflop drill</Link>
           <Link to="/settings">Settings</Link>
         </nav>

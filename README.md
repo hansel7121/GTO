@@ -24,6 +24,16 @@ Anything that has no reputable model (limped pots for the big blind, multiway be
 | `Preflop chart` | Chart lookup. RFI charts are transcribed verbatim from the cited source; facing-raise / 3-bet / 4-bet charts are bundled approximations of published solver output — import your own ranges in Settings for exact frequencies. |
 | `Equity / pot odds · approx` | Multiway / fallback math. |
 
+## GTO trainer (`/#/gto`)
+
+Play whole hands — preflop to showdown — against villains that sample the GTO strategy but with a style, and get graded on every street:
+
+- **Table**: 3–9 players, 20–200bb (⚙). Preflop uses the same chart sets as the drill below; postflop heads-up pots are solved on the device with the CFR solver (one flop solve per hand, ~30–60 s on a multi-core laptop with the default 45 s budget; turn and river decisions reuse it). Quick mode grades the flop by equity / pot odds and solves only turn and river (seconds). Multiway pots use equity heuristics for the bots and grade only call-vs-fold by pot odds.
+- **Villains**: tight / GTO / loose / maniac, or mixed (random per seat per hand, revealed at hand end). Styles reweight the GTO action frequencies (tight folds ×1.6, loose calls ×1.6 and rarely folds, maniac bets/raises ×2.5 with any two and picks the biggest size). Grading stays against GTO.
+- **Grading**: chart frequencies preflop; solver EV per action postflop (correct = within 0.5 % of the pot of the best EV, or an action the solver mixes ≥ 10 %). Mistakes come with a short explanation built from the solver numbers: EV difference, pot odds vs your equity, how often the villain folds to the recommended bet, and your made hand / draws.
+- **Bet sizes**: the % pot presets are the solver's tree (one size per street, one raise then all-in — bigger trees do not fit in browser memory); any custom size is added to the tree and re-solved.
+- Stats (accuracy, EV lost, net bb) persist in IndexedDB (`gtoDecisions`, `gtoHands`).
+
 ## Preflop drill (`/#/trainer`)
 
 A PokerNow-styled table (default 5-handed, 30bb; SB 0.5 / BB 1, no ante) that deals you random spots and grades every preflop decision. The ⚙ button sets stack depth (20–200bb) and players (3–9): depths up to 40bb grade with the 30bb 5-max charts, 50bb+ with the 100bb 6-max / full-ring cash charts, extra seats mapped onto the nearest chart seat.

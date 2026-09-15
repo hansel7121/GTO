@@ -96,6 +96,28 @@ export interface Drill {
   correct: boolean
 }
 
+/** One graded decision from the full-hand GTO trainer. */
+export interface GtoDecisionRow {
+  id: string
+  createdAt: number
+  handId: string
+  street: Street
+  scenario: string
+  engine: Engine
+  correct: boolean
+  evLossBb: number
+}
+
+/** One finished hand from the full-hand GTO trainer. */
+export interface GtoHandRow {
+  id: string
+  createdAt: number
+  players: number
+  stackBb: number
+  heroSeat: Seat
+  netBb: number
+}
+
 export interface RangeOverride {
   id: string // chart key
   actions: { raise?: string; call?: string; allin?: string; limp?: string }

@@ -11,7 +11,23 @@ const green = 'border-[#3f9e5a] text-[#4fc06f] hover:bg-[#233d2b] active:bg-[#2a
 const red = 'border-[#c43c3c] text-[#e04b4b] hover:bg-[#3d2323] active:bg-[#4a2a2a]'
 const grey = 'border-[#3a3a3a] text-[#5a5a5a]'
 
-export function ActionBar({ state, hero, enabled, onAct }: { state: HandState; hero: Seat; enabled: boolean; onAct: (a: Action) => void }) {
+export function ActionBar({
+  state,
+  hero,
+  enabled,
+  onAct,
+  presets: extraPresets,
+  customNote,
+}: {
+  state: HandState
+  hero: Seat
+  enabled: boolean
+  onAct: (a: Action) => void
+  /** Extra "raise to / bet" presets, e.g. the solver's tree sizes. */
+  presets?: { label: string; to: number }[]
+  /** Shown under the size panel (e.g. "custom sizes re-solve the spot"). */
+  customNote?: string
+}) {
   const me = state.players[hero]
   const toCall = Math.max(0, state.currentBet - me.committed)
   const callAmt = Math.min(toCall, me.stack)
@@ -22,10 +38,15 @@ export function ActionBar({ state, hero, enabled, onAct }: { state: HandState; h
   const [raising, setRaising] = useState(false)
   const [to, setTo] = useState(Math.min(maxTo, state.minRaiseTo))
 
+  const postflop = state.street !== 'preflop'
+  const isBet = postflop && state.currentBet <= EPS
   const fold = () => onAct({ seat: hero, kind: 'fold' })
   const callOrCheck = () => onAct({ seat: hero, kind: canCheck ? 'check' : 'call' })
   const allin = () => onAct({ seat: hero, kind: 'allin' })
-  const confirmRaise = () => onAct(legalRaise(state, hero, to))
+  const confirmRaise = () => {
+    const a = legalRaise(state, hero, to)
+    onAct(a.kind === 'raise' && isBet ? { ...a, kind: 'bet' } : a)
+  }
 
   useEffect(() => {
     if (!enabled) return
@@ -49,13 +70,19 @@ export function ActionBar({ state, hero, enabled, onAct }: { state: HandState; h
   })
 
   const pot = state.pot
-  const presets: { label: string; to: number }[] = []
-  if (state.currentBet <= 1 + EPS) {
-    presets.push({ label: '2.5x', to: 2.5 }, { label: '3x', to: 3 }, { label: '4x', to: 4 })
+  const presets: { label: string; to: number }[] = [...(extraPresets ?? [])]
+  if (!postflop) {
+    if (state.currentBet <= 1 + EPS) {
+      presets.push({ label: '2.5x', to: 2.5 }, { label: '3x', to: 3 }, { label: '4x', to: 4 })
+    } else {
+      presets.push({ label: '2.5x', to: state.currentBet * 2.5 }, { label: '3x', to: state.currentBet * 3 }, { label: '3.5x', to: state.currentBet * 3.5 })
+    }
+    presets.push({ label: 'Pot', to: pot + toCall + toCall })
+  } else if (isBet) {
+    for (const f of [0.33, 0.5, 0.75, 1]) presets.push({ label: `${Math.round(f * 100)}%`, to: Math.round(pot * f * 10) / 10 })
   } else {
-    presets.push({ label: '2.5x', to: state.currentBet * 2.5 }, { label: '3x', to: state.currentBet * 3 }, { label: '3.5x', to: state.currentBet * 3.5 })
+    presets.push({ label: '2.5x', to: state.currentBet * 2.5 }, { label: 'Pot', to: state.currentBet + pot + toCall })
   }
-  presets.push({ label: 'Pot', to: pot + toCall + toCall })
 
   return (
     <div className="flex flex-col items-end gap-2">
@@ -106,9 +133,10 @@ export function ActionBar({ state, hero, enabled, onAct }: { state: HandState; h
               Cancel
             </button>
             <button type="button" className={`${btn} ${green}`} onClick={confirmRaise}>
-              {to >= maxTo - EPS ? 'All-in' : `Raise to ${trim(Math.min(maxTo, Math.max(state.minRaiseTo, to)))}`}
+              {to >= maxTo - EPS ? 'All-in' : `${isBet ? 'Bet' : 'Raise to'} ${trim(Math.min(maxTo, Math.max(state.minRaiseTo, to)))}`}
             </button>
           </div>
+          {customNote && <div className="text-[10px] text-[#8a8a8a]">{customNote}</div>}
         </div>
       )}
       <div className="flex gap-2">
@@ -116,7 +144,7 @@ export function ActionBar({ state, hero, enabled, onAct }: { state: HandState; h
           Call {!canCheck && enabled ? trim(callAmt) : ''}
         </button>
         <button type="button" disabled={!enabled || !canRaise} className={`${btn} ${!enabled || !canRaise ? grey : green}`} onClick={() => setRaising((r) => !r)}>
-          Raise
+          {isBet ? 'Bet' : 'Raise'}
         </button>
         <button type="button" disabled={!enabled || !canCheck} className={`${btn} ${!enabled || !canCheck ? grey : green}`} onClick={callOrCheck}>
           Check

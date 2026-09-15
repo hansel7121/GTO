@@ -4,7 +4,7 @@ import { postflopOrder, type Seat } from '../domain/positions'
 import type { Action, Analysis, AnalysisOption, Hand, Settings, Street } from '../domain/types'
 import { rangeToRaw, type Range } from '../preflop/range'
 import { solveAndQuery, type SolveOutcome } from './client'
-import type { LineStep, SolveConfig, SolveProgress } from './worker'
+import type { LineStep, NodeResult, SolveConfig, SolveProgress } from './worker'
 
 /** Solver chips per big blind. */
 export const CHIPS_PER_BB = 100
@@ -135,8 +135,24 @@ export interface CfrResult {
   spot: PostflopSpot
 }
 
-/** Run (or reuse) the CFR solve for the hand and return hero's strategy at the decision node. */
-export async function analyzeWithCfr(req: CfrRequest): Promise<CfrResult> {
+export interface PreparedCfr {
+  spot: PostflopSpot
+  cfgSolve: SolveConfig
+  line: LineStep[]
+  notes: string[]
+  /** Street the solve starts from ('flop' in full mode). */
+  fromStreet: Street
+}
+
+/**
+ * Build the solver configuration and line for the decision at `actionsUpTo`. Any actual holding
+ * in `extraHands` (hero, and the villain when simulating) that falls outside the chart range is
+ * added with a tiny weight so the solver still has a (best-response quality) strategy for it.
+ */
+export function prepareCfr(
+  req: Omit<CfrRequest, 'onProgress'>,
+  extraHands: { seat: Seat; cards: [Card, Card] }[] = req.hand.heroCards ? [{ seat: req.hand.heroSeat, cards: req.hand.heroCards }] : [],
+): PreparedCfr {
   const spot = postflopSpot(req.cfg, req.hand, req.actionsUpTo)
   if (!spot) throw new Error('Not a heads-up pot')
   const heroRange = req.ranges.get(spot.hero)
@@ -147,20 +163,25 @@ export async function analyzeWithCfr(req: CfrRequest): Promise<CfrResult> {
   const fromStreet = req.from === 'street' && decisionStreet !== 'flop' ? streetStart(req.cfg, req.hand, decisionStreet, req.actionsUpTo) : null
   const boardLen = fromStreet ? (fromStreet.street === 'turn' ? 4 : 5) : 3
   const board = req.hand.board.slice(0, boardLen)
-  const dead = [...req.hand.board]
+  // only the cards the solve starts with are dead: later streets are chance nodes inside the
+  // tree, and keeping the ranges identical lets turn/river decisions reuse the flop solve
+  const dead = board
   const heroRaw = rangeToRaw(heroRange, dead)
   const villainRaw = rangeToRaw(villainRange, dead)
-  const extraNotes: string[] = []
-  const hc = req.hand.heroCards!
-  const heroIdx = pairIndex(hc[0], hc[1])
-  if (heroRaw[heroIdx] <= 0) {
-    // hero's actual holding is outside the chart range: add it with a tiny weight so the solver
-    // still produces a (best-response quality) strategy for it without moving the equilibrium
-    heroRaw[heroIdx] = 0.02
-    extraNotes.push('Your hand is outside the preflop range for this line; it was added with a tiny weight so the solver could still grade it (best-response quality).')
+  const notes: string[] = []
+  for (const h of extraHands) {
+    const raw = h.seat === spot.hero ? heroRaw : h.seat === spot.villain ? villainRaw : null
+    if (!raw) continue
+    const idx = pairIndex(h.cards[0], h.cards[1])
+    if (raw[idx] <= 0) {
+      raw[idx] = 0.02
+      if (h.seat === req.hand.heroSeat) {
+        notes.push('Your hand is outside the preflop range for this line; it was added with a tiny weight so the solver could still grade it (best-response quality).')
+      }
+    }
   }
   if (fromStreet) {
-    extraNotes.push(`Quick mode: solved from the ${fromStreet.street} with preflop ranges (not narrowed by earlier streets). Re-grade with the full solver for an exact answer.`)
+    notes.push(`Quick mode: solved from the ${fromStreet.street} with preflop ranges (not narrowed by earlier streets). Re-grade with the full solver for an exact answer.`)
   }
   const cfgSolve: SolveConfig = {
     oopRange: spot.heroIsOop ? heroRaw : villainRaw,
@@ -182,48 +203,37 @@ export async function analyzeWithCfr(req: CfrRequest): Promise<CfrResult> {
   }
   const extend = req.includeChosen && req.hand.actions.length > req.actionsUpTo ? 1 : 0
   const line = buildLine(req.cfg, req.hand, req.actionsUpTo + extend, fromStreet ?? undefined)
-  const outcome = await solveAndQuery(cfgSolve, line, req.onProgress, req.settings.threads, extend)
-  const analysis = nodeToAnalysis(outcome, spot, req.hand)
-  analysis.notes.push(...extraNotes)
-  if (fromStreet) {
+  return { spot, cfgSolve, line, notes, fromStreet: fromStreet?.street ?? 'flop' }
+}
+
+/** Run (or reuse) the CFR solve for the hand and return hero's strategy at the decision node. */
+export async function analyzeWithCfr(req: CfrRequest): Promise<CfrResult> {
+  const prep = prepareCfr(req)
+  const extend = req.includeChosen && req.hand.actions.length > req.actionsUpTo ? 1 : 0
+  const outcome = await solveAndQuery(prep.cfgSolve, prep.line, req.onProgress, req.settings.threads, extend)
+  const analysis = nodeToAnalysis(outcome, prep.spot, req.hand)
+  analysis.notes.push(...prep.notes)
+  if (prep.fromStreet !== 'flop') {
     analysis.confidence = 'approx'
     analysis.provisional = true
   }
-  return { analysis, outcome, spot }
+  return { analysis, outcome, spot: prep.spot }
 }
 
-function nodeToAnalysis(outcome: SolveOutcome, spot: PostflopSpot, hand: Hand): Analysis {
-  const node = outcome.node
-  const notes: string[] = []
-  const heroPlayer = spot.heroIsOop ? 'oop' : 'ip'
-  if (node.player !== heroPlayer) {
-    return {
-      engine: 'cfr',
-      confidence: 'approx',
-      options: [],
-      bestIndex: -1,
-      notes: [`Solver node belongs to ${node.player}, not hero (${heroPlayer}). Check the action log.`],
-    }
-  }
-  const heroCards = hand.heroCards!
-  const key1 = cardToString(heroCards[0]) + cardToString(heroCards[1])
-  const key2 = cardToString(heroCards[1]) + cardToString(heroCards[0])
-  const idx = node.hands.findIndex((h) => h === key1 || h === key2)
-  if (idx < 0) {
-    return {
-      engine: 'cfr',
-      confidence: 'approx',
-      options: [],
-      bestIndex: -1,
-      notes: ['Hero hand is not in the preflop range used for this line (0 combos), so the solver has no strategy for it. Widen the chart or import your own ranges.'],
-      exploitability: outcome.exploitabilityPct,
-    }
-  }
-  const options: AnalysisOption[] = node.actions.map((a, ai) => {
+/** Index of `cards` in a node's hand list (-1 when the holding has no combos there). */
+export function nodeHandIndex(node: NodeResult, cards: [Card, Card]): number {
+  const key1 = cardToString(cards[0]) + cardToString(cards[1])
+  const key2 = cardToString(cards[1]) + cardToString(cards[0])
+  return node.hands.findIndex((h) => h === key1 || h === key2)
+}
+
+/** The acting player's options at a solver node for one specific holding (labels, freq, EV in bb). */
+export function nodeOptions(node: NodeResult, idx: number): AnalysisOption[] {
+  const potBb = toBb(node.pot)
+  return node.actions.map((a, ai) => {
     const [k, v] = a.split(':')
     const amountBb = toBb(Number(v))
     const kind = k === 'Fold' ? 'fold' : k === 'Check' ? 'check' : k === 'Call' ? 'call' : k === 'Bet' ? 'bet' : k === 'Raise' ? 'raise' : 'allin'
-    const potBb = toBb(node.pot)
     const label =
       kind === 'fold' ? 'Fold' : kind === 'check' ? 'Check' : kind === 'call' ? 'Call'
         : kind === 'allin' ? `All-in ${fmt(amountBb)}bb`
@@ -236,6 +246,34 @@ function nodeToAnalysis(outcome: SolveOutcome, spot: PostflopSpot, hand: Hand): 
       ev: node.evs[ai] ? toBb(node.evs[ai][idx]) : undefined,
     }
   })
+}
+
+/** Turn a solver node into hero's Analysis (exported for the trainer). */
+export function nodeToAnalysis(outcome: SolveOutcome, spot: PostflopSpot, hand: Pick<Hand, 'heroCards'>): Analysis {
+  const node = outcome.node
+  const notes: string[] = []
+  const heroPlayer = spot.heroIsOop ? 'oop' : 'ip'
+  if (node.player !== heroPlayer) {
+    return {
+      engine: 'cfr',
+      confidence: 'approx',
+      options: [],
+      bestIndex: -1,
+      notes: [`Solver node belongs to ${node.player}, not hero (${heroPlayer}). Check the action log.`],
+    }
+  }
+  const idx = nodeHandIndex(node, hand.heroCards!)
+  if (idx < 0) {
+    return {
+      engine: 'cfr',
+      confidence: 'approx',
+      options: [],
+      bestIndex: -1,
+      notes: ['Hero hand is not in the preflop range used for this line (0 combos), so the solver has no strategy for it. Widen the chart or import your own ranges.'],
+      exploitability: outcome.exploitabilityPct,
+    }
+  }
+  const options = nodeOptions(node, idx)
   let bestIndex = 0
   for (let i = 1; i < options.length; i++) {
     const a = options[i].ev ?? -Infinity

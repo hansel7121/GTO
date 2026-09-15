@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { trim } from '../app/format'
 import type { Card } from '../domain/cards'
 import type { HandState } from '../domain/engine'
@@ -41,6 +41,7 @@ function actionLabel(a: Action): string {
     case 'check': return 'Check'
     case 'call': return 'Call'
     case 'allin': return 'All-in'
+    case 'bet': return `Bet ${trim(a.amount ?? 0)}`
     default: return `Raise ${trim(a.amount ?? 0)}`
   }
 }
@@ -54,6 +55,9 @@ export function Table({
   activeSeat,
   reveal,
   stackBb,
+  board,
+  badges,
+  overlay,
 }: {
   seats: Seat[]
   hero: Seat
@@ -65,6 +69,12 @@ export function Table({
   /** Show every remaining villain's cards (end of hand). */
   reveal: boolean
   stackBb: number
+  /** Community cards (full-hand trainer). */
+  board?: Card[]
+  /** Small label under a seat name, e.g. villain style. */
+  badges?: Record<string, string | undefined>
+  /** Overlay drawn on the felt (e.g. solver progress). */
+  overlay?: ReactNode
 }) {
   const small = useIsSmall()
   const slots = seatSlots(seats.length, small)
@@ -83,9 +93,17 @@ export function Table({
         </div>
       </div>
       {/* pot */}
-      <div className="absolute left-1/2 top-[34%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1f1f1f]/90 border border-[#3a3a3a] text-white text-xs sm:text-sm px-3 py-0.5 tabular-nums">
+      <div className="absolute left-1/2 top-[29%] sm:top-[34%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1f1f1f]/90 border border-[#3a3a3a] text-white text-xs sm:text-sm px-3 py-0.5 tabular-nums">
         {trim(state.pot)}
       </div>
+      {board && board.length > 0 && (
+        <div className="absolute left-1/2 top-[52%] -translate-x-1/2 -translate-y-1/2 flex gap-1">
+          {board.map((c) => (
+            <PlayingCard key={c} card={c} size="md" />
+          ))}
+        </div>
+      )}
+      {overlay && <div className="absolute left-1/2 top-[66%] -translate-x-1/2 -translate-y-1/2 w-[60%] max-w-xs">{overlay}</div>}
       {seats.map((seat, i) => {
         const slot = slots[(i - heroIdx + seats.length) % seats.length]
         const p = state.players[seat]
@@ -125,6 +143,7 @@ export function Table({
               >
                 <div className="text-[11px] sm:text-sm font-semibold text-white leading-tight whitespace-nowrap">{isHero ? `you · ${seat}` : seat}</div>
                 <div className="text-[11px] sm:text-sm text-[#cfcfcf] tabular-nums leading-tight">{trim(p.stack)}</div>
+                {badges?.[seat] && <div className="text-[9px] sm:text-[10px] uppercase tracking-wide text-[#f4d445] leading-tight">{badges[seat]}</div>}
                 {last && (
                   <div className={`absolute -top-2.5 right-1 rounded px-1 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide ${
                     last.kind === 'fold' ? 'bg-[#3a3a3a] text-[#bdbdbd]' : last.kind === 'allin' ? 'bg-[#c43c3c] text-white' : 'bg-[#2f9e5f] text-white'

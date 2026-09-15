@@ -106,7 +106,10 @@ export function rangesFromPreflop(
   preflopActions: Action[],
   seatsIn: Seat[],
   resolve: ChartResolver,
+  /** Explicit chart set (e.g. '5max30'); default = pick by table size. */
+  format?: ChartFormat,
 ): LineRanges {
+  const find = (scenario: Scenario, hero: Seat, villain?: Seat) => findChart(resolve, tableSize, scenario, hero, villain, format)
   const notes: string[] = []
   let approx = false
   const ranges = new Map<Seat, Range>()
@@ -118,7 +121,7 @@ export function rangesFromPreflop(
   const fallbackFor = (seat: Seat, label: string): Range => {
     approx = true
     notes.push(`${seat}: no chart for "${label}", using the ${seat} open range as a stand-in.`)
-    const hit = findChart(resolve, tableSize, 'RFI', seat)
+    const hit = find('RFI', seat)
     return hit ? chartRange(hit.chart, 'raise') : parseRange('22+,A2s+,K2s+,Q2s+,J5s+,T7s+,97s+,86s+,75s+,65s,A2o+,K8o+,Q9o+,J9o+,T9o')
   }
 
@@ -142,10 +145,10 @@ export function rangesFromPreflop(
       continue
     }
     if (seat === opener) {
-      const rfi = findChart(resolve, tableSize, 'RFI', seat)
+      const rfi = find('RFI', seat)
       let r = rfi ? chartRange(rfi.chart, 'raise') : fallbackFor(seat, 'open')
       if (threeBettor) {
-        const v3 = findChart(resolve, tableSize, 'VS_3BET', seat, threeBettor)
+        const v3 = find('VS_3BET', seat, threeBettor)
         if (v3) {
           const action = fourBettor === seat ? 'raise' : 'call'
           r = multiplyRanges(r, chartRange(v3.chart, action))
@@ -161,10 +164,10 @@ export function rangesFromPreflop(
       continue
     }
     if (seat === threeBettor) {
-      const vr = findChart(resolve, tableSize, 'VS_RFI', seat, opener!)
+      const vr = find('VS_RFI', seat, opener!)
       let r = vr ? chartRange(vr.chart, 'raise') : fallbackFor(seat, '3-bet')
       if (fourBettor && fourBettor !== seat) {
-        const v4 = findChart(resolve, tableSize, 'VS_4BET', seat, opener!)
+        const v4 = find('VS_4BET', seat, opener!)
         if (v4) {
           const p = chartRange(v4.chart, lastAct.kind === 'allin' ? 'allin' : 'call')
           r = multiplyRanges(r, p)
@@ -177,12 +180,12 @@ export function rangesFromPreflop(
     if (lastAct.kind === 'call') {
       const lastRaiser = raisesList[raisesList.length - 1].seat
       if (raisesList.length === 1) {
-        const vr = findChart(resolve, tableSize, 'VS_RFI', seat, opener!)
+        const vr = find('VS_RFI', seat, opener!)
         ranges.set(seat, vr ? chartRange(vr.chart, 'call') : fallbackFor(seat, 'call open'))
       } else {
         approx = true
         notes.push(`${seat}: cold-called a ${raisesList.length === 2 ? '3-bet' : '4-bet'}; using the "call vs 3-bet" range of an opener as a stand-in.`)
-        const v3 = findChart(resolve, tableSize, 'VS_3BET', seat, lastRaiser)
+        const v3 = find('VS_3BET', seat, lastRaiser)
         ranges.set(seat, v3 ? chartRange(v3.chart, 'call') : fallbackFor(seat, 'cold call'))
       }
       continue
