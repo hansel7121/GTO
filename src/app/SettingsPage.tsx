@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { DEFAULT_SETTINGS, type Settings } from '../domain/types'
 import { BUNDLED_CHARTS, type Chart } from '../preflop/charts'
 import { parseRange, rangePercent } from '../preflop/range'
+import { askCoach, COACH_MODELS } from '../coach/client'
 import { db, exportAll, importAll, loadSettings, saveSettings } from '../storage/db'
 import { solverInfo } from '../solver/client'
 import { inputCls } from './HomePage'
@@ -90,10 +91,79 @@ export function SettingsPage() {
         </button>
       </section>
 
+      <ClaudeSection s={s} update={update} />
+
       <RangeImporter />
 
       <DataSection />
     </div>
+  )
+}
+
+function ClaudeSection({ s, update }: { s: Settings; update: (patch: Partial<Settings>) => void }) {
+  const [show, setShow] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [testing, setTesting] = useState(false)
+  const test = async () => {
+    setTesting(true)
+    setMsg('')
+    try {
+      await askCoach({
+        apiKey: s.claudeApiKey.trim(),
+        model: s.claudeModel,
+        handText: '(connection test — no hand)',
+        turns: [{ role: 'user', text: 'Reply with the single word OK.', at: Date.now() }],
+        onText: () => {},
+      })
+      setMsg('Key works.')
+    } catch (e) {
+      setMsg((e as Error).message)
+    } finally {
+      setTesting(false)
+    }
+  }
+  return (
+    <section className="space-y-2">
+      <h2 className="font-semibold">Ask Claude</h2>
+      <p className="text-xs text-slate-400">
+        With an Anthropic API key, any hand can be sent to Claude for a plain-language explanation of why the recommended actions are right
+        (needs an internet connection; the answers are saved with the hand). The key is stored on this device only, is never included in backups,
+        and is only ever sent to api.anthropic.com. Get one at console.anthropic.com — usage is billed to your account (roughly a few cents per hand).
+      </p>
+      <label className="block text-sm">
+        API key
+        <div className="flex gap-2">
+          <input
+            type={show ? 'text' : 'password'}
+            autoComplete="off"
+            spellCheck={false}
+            value={s.claudeApiKey}
+            onChange={(e) => update({ claudeApiKey: e.target.value.trim() })}
+            placeholder="sk-ant-…"
+            className={inputCls + ' flex-1 min-w-0 font-mono text-xs'}
+          />
+          <button type="button" onClick={() => setShow(!show)} className="mt-1 px-3 rounded-lg bg-slate-800 text-xs">
+            {show ? 'hide' : 'show'}
+          </button>
+        </div>
+      </label>
+      <label className="block text-sm">
+        Model
+        <select value={s.claudeModel} onChange={(e) => update({ claudeModel: e.target.value })} className={inputCls}>
+          {COACH_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex gap-2 items-center">
+        <button type="button" disabled={!s.claudeApiKey || testing} onClick={test} className="px-3 py-2 rounded-lg bg-slate-800 text-sm disabled:opacity-40">
+          {testing ? 'Testing…' : 'Test key'}
+        </button>
+        <span className="text-xs text-slate-400">{msg}</span>
+      </div>
+    </section>
   )
 }
 

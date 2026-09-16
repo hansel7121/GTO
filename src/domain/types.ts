@@ -82,6 +82,18 @@ export interface Hand {
   decisions: Decision[]
   note?: string
   result?: number // hero net result in bb, optional
+  /** "Ask Claude" conversation about this hand (saved so it can be re-read offline). */
+  coach?: CoachTurn[]
+}
+
+/** One message in the "Ask Claude" conversation about a hand. */
+export interface CoachTurn {
+  role: 'user' | 'assistant'
+  text: string
+  at: number
+  model?: string
+  /** True when the reply was cut off (connection lost, cancelled, error). */
+  partial?: boolean
 }
 
 /** One graded decision from the preflop trainer. */
@@ -137,6 +149,9 @@ export interface Settings {
   /** full = always solve from the flop; street = solve from the current street (turn/river) and use equity on the flop; off = equity only */
   solverMode: 'auto' | 'full' | 'street' | 'off'
   maxRaises: number
+  /** Anthropic API key for "Ask Claude" hand explanations (stored on this device only). */
+  claudeApiKey: string
+  claudeModel: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -151,4 +166,6 @@ export const DEFAULT_SETTINGS: Settings = {
   threads: 0,
   solverMode: 'auto',
   maxRaises: 1,
+  claudeApiKey: '',
+  claudeModel: 'claude-opus-5',
 }

@@ -8,8 +8,11 @@ import { DEFAULT_SETTINGS, type Action, type Analysis, type Decision, type Hand,
 import { grade } from '../scoring/score'
 import { db, loadSettings, newId } from '../storage/db'
 import type { SolveProgress } from '../solver/worker'
+import { questionForDecision } from '../coach/prompt'
+import { useCoach, useOnline } from '../coach/useCoach'
 import { AnalysisCard } from '../ui/AnalysisCard'
 import { CardChip, CardPicker, REVEAL_MS } from '../ui/Cards'
+import { CoachPanel } from '../ui/CoachPanel'
 import { analyzeDecision, effectiveMode, engineConfig } from './analyze'
 import { makeFmt, trim } from './format'
 import { createHand } from './hands'
@@ -48,6 +51,8 @@ export function HandPage() {
 
   const fmt = session ? makeFmt(session, settings.showBb) : (x: number) => `${trim(x)}bb`
   const cfg = session && hand ? engineConfig(session, hand) : null
+  const coach = useCoach(session, hand, cfg, settings)
+  const online = useOnline()
   const state = cfg && hand ? computeState(cfg, hand.board.length, hand.actions) : null
   const heroTurn = !!(state && hand && state.toAct === hand.heroSeat && !state.error)
   const liveKey = hand ? `${hand.id}:${hand.actions.length}:${hand.board.join('.')}:${hand.heroCards?.join('.') ?? ''}` : ''
@@ -199,6 +204,12 @@ export function HandPage() {
       setGrading((g) => ({ ...g, [d.id]: undefined }))
     }
   }
+
+  const askWhy = (d: Decision) => {
+    void coach.ask(questionForDecision(hand, d))
+    document.getElementById('coach')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const canAskClaude = online && !!settings.claudeApiKey && !coach.busy
 
   const nextHand = async () => {
     const h = await createHand(session, handsInSession[handsInSession.length - 1])
@@ -364,9 +375,22 @@ export function HandPage() {
             )}
           </div>
           {hand.decisions.map((d) => (
-            <DecisionCard key={d.id} d={d} fmt={fmt} grading={grading[d.id]} onRegrade={() => regrade(d)} />
+            <DecisionCard key={d.id} d={d} fmt={fmt} grading={grading[d.id]} onRegrade={() => regrade(d)} onWhy={canAskClaude ? () => askWhy(d) : undefined} />
           ))}
         </div>
+      )}
+
+      {/* Plain-language explanation from Claude (needs Wi-Fi + an API key; answers are saved on the hand) */}
+      {(hand.decisions.length > 0 || (hand.coach?.length ?? 0) > 0) && (
+        <CoachPanel
+          turns={hand.coach ?? []}
+          state={{ streaming: coach.streaming, error: coach.error, busy: coach.busy }}
+          online={online}
+          hasKey={!!settings.claudeApiKey}
+          onAsk={(q) => void coach.ask(q)}
+          onCancel={coach.cancel}
+          onClear={() => void coach.clear()}
+        />
       )}
 
       <div className="pt-6 flex justify-between">
@@ -554,7 +578,20 @@ function round2(x: number) {
   return Math.round(x * 100) / 100
 }
 
-function DecisionCard({ d, fmt, grading, onRegrade }: { d: Decision; fmt: (bb: number) => string; grading?: SolveProgress | 'running'; onRegrade: () => void }) {
+function DecisionCard({
+  d,
+  fmt,
+  grading,
+  onRegrade,
+  onWhy,
+}: {
+  d: Decision
+  fmt: (bb: number) => string
+  grading?: SolveProgress | 'running'
+  onRegrade: () => void
+  /** Ask Claude to explain this decision (undefined when offline / no API key). */
+  onWhy?: () => void
+}) {
   const [open, setOpen] = useState(false)
   const a = d.analysis
   const status = grading ? 'solving…' : !a ? 'not analysed' : a.correct === undefined ? 'ungraded' : a.correct ? (a.provisional ? 'OK (quick)' : 'OK') : a.provisional ? 'mistake (quick)' : 'mistake'
@@ -582,9 +619,16 @@ function DecisionCard({ d, fmt, grading, onRegrade }: { d: Decision; fmt: (bb: n
         <div className="mt-2 space-y-2">
           {a ? <AnalysisCard analysis={a} fmtBb={fmt} /> : <div className="text-slate-400 text-xs">Not analysed yet.</div>}
           {!grading && (
-            <button type="button" onClick={onRegrade} className="text-xs px-2 py-1 rounded bg-slate-800">
-              {a ? (a.provisional ? 'Full solve' : 'Re-analyse') : 'Analyse'}
-            </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={onRegrade} className="text-xs px-2 py-1 rounded bg-slate-800">
+                {a ? (a.provisional ? 'Full solve' : 'Re-analyse') : 'Analyse'}
+              </button>
+              {a && onWhy && (
+                <button type="button" onClick={onWhy} className="text-xs px-2 py-1 rounded bg-violet-800">
+                  Why? (ask Claude)
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}

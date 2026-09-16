@@ -24,6 +24,10 @@ Anything that has no reputable model (limped pots for the big blind, multiway be
 | `Preflop chart` | Chart lookup. RFI charts are transcribed verbatim from the cited source; facing-raise / 3-bet / 4-bet charts are bundled approximations of published solver output — import your own ranges in Settings for exact frequencies. |
 | `Equity / pot odds · approx` | Multiway / fallback math. |
 
+### Ask Claude (optional, needs Wi-Fi)
+
+Confused why the solver says one thing when you did another? Put an Anthropic API key in **Settings → Ask Claude**, then on any hand press **Ask Claude why** (or **Why?** on a single decision). The hand history and every decision's engine output are sent to the Claude API and a plain-language explanation streams back; follow-up questions keep the context. Answers are saved with the hand so they can be re-read offline. The key stays on the device (it is never written to backups) and the buttons are disabled while offline. Usage is billed to your Anthropic account.
+
 ## GTO trainer (`/#/gto`)
 
 Play whole hands — preflop to showdown — against villains that sample the GTO strategy but with a style, and get graded on every street:

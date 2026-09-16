@@ -12,6 +12,7 @@
     "deploy": "node scripts/deploy.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
     "comlink": "^4.4.2",
     "dexie": "^4.4.6",
     "dexie-react-hooks": "^4.4.0",

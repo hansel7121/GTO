@@ -60,7 +60,13 @@ export async function exportAll(): Promise<string> {
     db.gtoDecisions.toArray(),
     db.gtoHands.toArray(),
   ])
-  return JSON.stringify({ version: 3, exportedAt: new Date().toISOString(), sessions, hands, overrides, settings, drills, gtoDecisions, gtoHands }, null, 2)
+  // the API key never leaves the device: backups are files that get shared around
+  const safeSettings = settings.map((s) => ({ ...s, claudeApiKey: '' }))
+  return JSON.stringify(
+    { version: 3, exportedAt: new Date().toISOString(), sessions, hands, overrides, settings: safeSettings, drills, gtoDecisions, gtoHands },
+    null,
+    2,
+  )
 }
 
 export async function importAll(json: string): Promise<{ sessions: number; hands: number }> {
@@ -77,7 +83,11 @@ export async function importAll(json: string): Promise<{ sessions: number; hands
     if (data.sessions) await db.sessions.bulkPut(data.sessions)
     if (data.hands) await db.hands.bulkPut(data.hands)
     if (data.overrides) await db.overrides.bulkPut(data.overrides)
-    if (data.settings) await db.settings.bulkPut(data.settings)
+    if (data.settings) {
+      // keep the API key that is already on this device (backups never contain it)
+      const current = await db.settings.get('settings')
+      await db.settings.bulkPut(data.settings.map((s) => (s.id === 'settings' && !s.claudeApiKey ? { ...s, claudeApiKey: current?.claudeApiKey ?? '' } : s)))
+    }
     if (data.drills) await db.drills.bulkPut(data.drills)
     if (data.gtoDecisions) await db.gtoDecisions.bulkPut(data.gtoDecisions)
     if (data.gtoHands) await db.gtoHands.bulkPut(data.gtoHands)
